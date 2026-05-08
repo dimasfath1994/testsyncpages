@@ -142,7 +142,7 @@
     // =========================
     async function pushToGitHub() {
       try {
-        const url = `https://api.github.com/repos/${USER}/${REPO}/contents/${FILE}`;
+        const url = `https://api.github.com/repos/${GITHUB_USER}/${GITHUB_REPO}/contents/${FILE_PATH}`;
 
         console.log("📡 GET FILE FOR SHA...");
 
