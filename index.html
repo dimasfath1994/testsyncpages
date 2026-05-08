@@ -1,0 +1,163 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8" />
+  <title>Post Dim Realtime Sync</title>
+
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      background: #0f172a;
+      color: white;
+      display: flex;
+      justify-content: center;
+      padding-top: 40px;
+    }
+
+    .container {
+      width: 420px;
+    }
+
+    h2 {
+      margin-bottom: 20px;
+    }
+
+    form {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      margin-bottom: 20px;
+    }
+
+    input {
+      padding: 10px;
+      border-radius: 6px;
+      border: none;
+      outline: none;
+    }
+
+    button {
+      padding: 10px;
+      background: #22c55e;
+      border: none;
+      color: white;
+      cursor: pointer;
+      border-radius: 6px;
+    }
+
+    button:hover {
+      background: #16a34a;
+    }
+
+    #list {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+
+    .card {
+      background: #1e293b;
+      padding: 10px;
+      border-radius: 6px;
+    }
+
+    .name {
+      font-weight: bold;
+      color: #38bdf8;
+    }
+  </style>
+</head>
+
+<body>
+  <div class="container">
+    <h2>Post Dim - Realtime Sync</h2>
+
+    <form id="form">
+      <input type="text" id="name" placeholder="Name" required />
+      <input type="text" id="message" placeholder="Message" required />
+      <button type="submit">Send</button>
+    </form>
+
+    <div id="list"></div>
+  </div>
+
+  <script type="module">
+    import { createClient } from "https://cdn.jsdelivr.net/npm/@supabase/supabase-js/+esm";
+
+    // =======================
+    // 🔥 GANTI INI
+    // =======================
+    const SUPABASE_URL = "https://YOUR_PROJECT.supabase.co";
+    const SUPABASE_ANON_KEY = "YOUR_ANON_KEY";
+
+    const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+    const form = document.getElementById("form");
+    const list = document.getElementById("list");
+
+    // =======================
+    // render message
+    // =======================
+    function render(msg) {
+      const div = document.createElement("div");
+      div.className = "card";
+
+      div.innerHTML = `
+        <div class="name">${msg.name}</div>
+        <div>${msg.message}</div>
+      `;
+
+      list.prepend(div);
+    }
+
+    // =======================
+    // load awal
+    // =======================
+    async function load() {
+      const { data } = await supabase
+        .from("messages")
+        .select("*")
+        .order("id", { ascending: false });
+
+      list.innerHTML = "";
+      data.forEach(render);
+    }
+
+    // =======================
+    // submit form
+    // =======================
+    form.addEventListener("submit", async (e) => {
+      e.preventDefault();
+
+      const name = document.getElementById("name").value;
+      const message = document.getElementById("message").value;
+
+      await supabase.from("messages").insert([
+        { name, message }
+      ]);
+
+      form.reset();
+    });
+
+    // =======================
+    // realtime sync
+    // =======================
+    supabase
+      .channel("messages-channel")
+      .on(
+        "postgres_changes",
+        {
+          event: "INSERT",
+          schema: "public",
+          table: "messages"
+        },
+        (payload) => {
+          render(payload.new);
+        }
+      )
+      .subscribe();
+
+    load();
+  </script>
+</body>
+</html>
