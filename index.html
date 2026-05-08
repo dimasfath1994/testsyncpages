@@ -2,8 +2,9 @@
 <html>
 <head>
   <meta charset="UTF-8" />
-  <title>Post Dim - Supabase Version</title>
+  <title>Post Dim - Supabase Clean Version</title>
 
+  <!-- Supabase SDK (PASTI hanya 1x) -->
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js"></script>
 
   <style>
@@ -26,6 +27,7 @@
       margin-bottom: 8px;
       border-radius: 6px;
       border: none;
+      outline: none;
     }
 
     button {
@@ -36,7 +38,11 @@
       margin-right: 5px;
     }
 
-    .add { background: #22c55e; color: white; }
+    .add {
+      background: #22c55e;
+      color: white;
+    }
+
     .card {
       background: #1e293b;
       padding: 10px;
@@ -49,7 +55,7 @@
 <body>
   <div class="container">
 
-    <h2>Post Dim - Supabase Sync</h2>
+    <h2>Post Dim - Supabase Realtime</h2>
 
     <input id="name" placeholder="Name" />
     <input id="message" placeholder="Message" />
@@ -62,20 +68,31 @@
 
 <script>
 /* =========================
-   CONFIG SUPABASE
+   CONFIG
 ========================= */
 const SUPABASE_URL = "https://dppocgudnizboyjhkqpp.supabase.co";
 const SUPABASE_ANON_KEY = "sb_publishable_sohjVB2_F6I12ivkKHh07g_06hOuThS";
 
-const supabase = window.supabase.createClient(
-  SUPABASE_URL,
-  SUPABASE_ANON_KEY
-);
+/* =========================
+   SAFE SINGLETON INIT
+   (ANTI DUPLICATE ERROR)
+========================= */
+if (!window.__supabaseClient) {
+  window.__supabaseClient = window.supabase.createClient(
+    SUPABASE_URL,
+    SUPABASE_ANON_KEY
+  );
+}
 
+const supabase = window.__supabaseClient;
+
+/* =========================
+   STATE
+========================= */
 const list = document.getElementById("list");
 
 /* =========================
-   RENDER UI
+   RENDER
 ========================= */
 function render(messages) {
   list.innerHTML = "";
@@ -97,16 +114,21 @@ function render(messages) {
    LOAD DATA
 ========================= */
 async function loadMessages() {
-  const { data } = await supabase
+  const { data, error } = await supabase
     .from("messages")
     .select("*")
     .order("created_at", { ascending: false });
+
+  if (error) {
+    console.error("LOAD ERROR:", error);
+    return;
+  }
 
   render(data || []);
 }
 
 /* =========================
-   CREATE (INSERT)
+   CREATE DATA
 ========================= */
 async function addMessage() {
   const name = document.getElementById("name").value;
@@ -114,9 +136,13 @@ async function addMessage() {
 
   if (!name || !message) return;
 
-  await supabase
+  const { error } = await supabase
     .from("messages")
     .insert([{ name, message }]);
+
+  if (error) {
+    console.error("INSERT ERROR:", error);
+  }
 
   document.getElementById("message").value = "";
 }
@@ -130,7 +156,7 @@ supabase
     "postgres_changes",
     { event: "*", schema: "public", table: "messages" },
     () => {
-      loadMessages(); // refresh semua device
+      loadMessages();
     }
   )
   .subscribe();
