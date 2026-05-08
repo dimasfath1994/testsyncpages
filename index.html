@@ -2,7 +2,7 @@
 <html>
 <head>
   <meta charset="UTF-8" />
-  <title>Post Dim - CRUD JSON Sync</title>
+  <title>Post Dim - GitHub Sync (No DB)</title>
 
   <style>
     body {
@@ -15,25 +15,19 @@
     }
 
     .container {
-      width: 500px;
+      width: 520px;
     }
 
     h2 {
       margin-bottom: 10px;
     }
 
-    form {
-      display: flex;
-      flex-direction: column;
-      gap: 10px;
-      margin-bottom: 10px;
-    }
-
     input {
       padding: 10px;
+      width: 100%;
+      margin-bottom: 8px;
       border-radius: 6px;
       border: none;
-      outline: none;
     }
 
     button {
@@ -41,201 +35,170 @@
       border: none;
       border-radius: 6px;
       cursor: pointer;
+      margin-top: 5px;
     }
 
-    .add {
-      background: #22c55e;
-      color: white;
-    }
-
-    .sync {
-      background: #3b82f6;
-      color: white;
-      margin-bottom: 10px;
-    }
+    .add { background: #22c55e; color: white; }
+    .sync { background: #3b82f6; color: white; }
+    .danger { background: #ef4444; color: white; }
 
     .card {
       background: #1e293b;
       padding: 10px;
-      border-radius: 6px;
       margin-top: 10px;
+      border-radius: 6px;
     }
 
     .actions {
-      margin-top: 10px;
       display: flex;
       gap: 5px;
+      margin-top: 8px;
     }
 
-    .edit {
-      background: #f59e0b;
-      color: black;
-      flex: 1;
-    }
-
-    .delete {
-      background: #ef4444;
-      color: white;
-      flex: 1;
-    }
-
-    .meta {
-      font-size: 11px;
-      color: #94a3b8;
-    }
+    .edit { background: #f59e0b; flex: 1; }
+    .delete { background: #ef4444; flex: 1; }
   </style>
 </head>
 
 <body>
   <div class="container">
 
-    <h2>Post Dim - CRUD JSON Sync</h2>
+    <h2>Post Dim - GitHub Sync</h2>
 
-    <button class="sync" id="syncBtn">Sync Remote JSON</button>
+    <input type="hidden" id="editId">
 
-    <form id="form">
-      <input type="hidden" id="editId" />
-      <input type="text" id="name" placeholder="Name" required />
-      <input type="text" id="message" placeholder="Message" required />
-      <button class="add" type="submit">Save</button>
-    </form>
+    <input id="name" placeholder="Name" />
+    <input id="message" placeholder="Message" />
+
+    <button class="add" onclick="saveData()">Save</button>
+    <button class="sync" onclick="syncFromGitHub()">Sync Now</button>
 
     <div id="list"></div>
   </div>
 
   <script>
     // =========================
-    const STORAGE_KEY = "postdim_crud";
-    const REMOTE_URL = "./data.json";
+    // 🔥 GITHUB CONFIG
+    // =========================
+    const GITHUB_USER = "YOUR_USERNAME";
+    const GITHUB_REPO = "YOUR_REPO";
+    const FILE_PATH = "data.json";
+    const TOKEN = "YOUR_GITHUB_TOKEN";
 
-    let data = load();
-
-    const form = document.getElementById("form");
-    const list = document.getElementById("list");
+    let data = [];
 
     // =========================
-    // LOAD / SAVE
-    // =========================
-    function load() {
-      return JSON.parse(localStorage.getItem(STORAGE_KEY)) || [];
-    }
-
-    function save() {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
-    }
-
-    // =========================
-    // RENDER
+    // LOAD LOCAL FIRST
     // =========================
     function render() {
+      const list = document.getElementById("list");
       list.innerHTML = "";
 
-      data
-        .slice()
-        .reverse()
-        .forEach(item => {
-          const div = document.createElement("div");
-          div.className = "card";
+      data.forEach(item => {
+        const div = document.createElement("div");
+        div.className = "card";
 
-          div.innerHTML = `
-            <div class="meta">
-              ${item.id}
-            </div>
+        div.innerHTML = `
+          <b>${item.name}</b><br/>
+          ${item.message}
 
-            <b>${item.name}</b><br/>
-            ${item.message}
+          <div class="actions">
+            <button class="edit">Edit</button>
+            <button class="delete">Delete</button>
+          </div>
+        `;
 
-            <div class="actions">
-              <button class="edit">Edit</button>
-              <button class="delete">Delete</button>
-            </div>
-          `;
+        // EDIT
+        div.querySelector(".edit").onclick = () => {
+          document.getElementById("editId").value = item.id;
+          document.getElementById("name").value = item.name;
+          document.getElementById("message").value = item.message;
+        };
 
-          // EDIT
-          div.querySelector(".edit").onclick = () => {
-            document.getElementById("editId").value = item.id;
-            document.getElementById("name").value = item.name;
-            document.getElementById("message").value = item.message;
-          };
+        // DELETE
+        div.querySelector(".delete").onclick = () => {
+          data = data.filter(d => d.id !== item.id);
+          pushToGitHub();
+          render();
+        };
 
-          // DELETE
-          div.querySelector(".delete").onclick = () => {
-            data = data.filter(d => d.id !== item.id);
-            save();
-            render();
-          };
-
-          list.appendChild(div);
-        });
+        list.appendChild(div);
+      });
     }
 
     // =========================
     // CREATE / UPDATE
     // =========================
-    form.addEventListener("submit", (e) => {
-      e.preventDefault();
-
+    function saveData() {
       const id = document.getElementById("editId").value;
       const name = document.getElementById("name").value;
       const message = document.getElementById("message").value;
 
       if (id) {
-        // UPDATE
         const item = data.find(d => d.id === id);
-        if (item) {
-          item.name = name;
-          item.message = message;
-        }
+        item.name = name;
+        item.message = message;
       } else {
-        // CREATE
         data.push({
           id: crypto.randomUUID(),
           name,
           message,
-          timestamp: Date.now(),
-          source: "local"
+          timestamp: Date.now()
         });
       }
 
-      save();
+      pushToGitHub();
       render();
-      form.reset();
-    });
-
-    // =========================
-    // SIMULATED SYNC (JSON FILE)
-    // =========================
-    async function syncRemote() {
-      try {
-        const res = await fetch(REMOTE_URL + "?t=" + Date.now());
-        const remote = await res.json();
-
-        merge(remote);
-      } catch (e) {
-        console.log("No remote file");
-      }
     }
 
-    function merge(remote) {
-      const map = new Map();
+    // =========================
+    // PUSH TO GITHUB (WRITE SYNC)
+    // =========================
+    async function pushToGitHub() {
+      const url = `https://api.github.com/repos/${GITHUB_USER}/${GITHUB_REPO}/contents/${FILE_PATH}`;
 
-      data.forEach(d => map.set(d.id, d));
-
-      remote.forEach(r => {
-        if (!map.has(r.id)) {
-          map.set(r.id, r);
-        }
+      // get current file SHA
+      const getRes = await fetch(url, {
+        headers: { Authorization: `token ${TOKEN}` }
       });
 
-      data = Array.from(map.values());
-      save();
+      const file = await getRes.json();
+
+      const content = btoa(unescape(encodeURIComponent(JSON.stringify(data, null, 2))));
+
+      await fetch(url, {
+        method: "PUT",
+        headers: {
+          Authorization: `token ${TOKEN}`,
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify({
+          message: "update data.json",
+          content,
+          sha: file.sha
+        })
+      });
+    }
+
+    // =========================
+    // PULL FROM GITHUB
+    // =========================
+    async function syncFromGitHub() {
+      const url = `https://raw.githubusercontent.com/${GITHUB_USER}/${GITHUB_REPO}/main/${FILE_PATH}`;
+
+      const res = await fetch(url + "?t=" + Date.now());
+      data = await res.json();
+
       render();
     }
 
-    document.getElementById("syncBtn").onclick = syncRemote;
+    // =========================
+    // AUTO SYNC (every 5 sec)
+    // =========================
+    setInterval(syncFromGitHub, 5000);
 
     // init
-    render();
+    syncFromGitHub();
   </script>
 </body>
 </html>
