@@ -2,10 +2,10 @@
 <html>
 <head>
   <meta charset="UTF-8" />
-  <title>Post Dim - Supabase Clean Version</title>
+  <title>Post Dim - Supabase Fixed</title>
 
-  <!-- Supabase SDK (PASTI hanya 1x) -->
-  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js"></script>
+  <!-- Supabase SDK -->
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 
   <style>
     body {
@@ -35,7 +35,6 @@
       border: none;
       border-radius: 6px;
       cursor: pointer;
-      margin-right: 5px;
     }
 
     .add {
@@ -71,20 +70,16 @@
    CONFIG
 ========================= */
 const SUPABASE_URL = "https://dppocgudnizboyjhkqpp.supabase.co";
-const SUPABASE_ANON_KEY = "sb_publishable_sohjVB2_F6I12ivkKHh07g_06hOuThS";
+const SUPABASE_ANON_KEY = "sb_publishable_sohjVB2_F6I12ivkKHh07g_06hOuThS"; // pakai sb_publishable_xxx
 
 /* =========================
-   SAFE SINGLETON INIT
-   (ANTI DUPLICATE ERROR)
+   INIT SUPABASE (SAFE)
 ========================= */
-if (!window.__supabaseClient) {
-  window.__supabaseClient = window.supabase.createClient(
-    SUPABASE_URL,
-    SUPABASE_ANON_KEY
-  );
-}
+window.supabaseClient =
+  window.supabaseClient ||
+  window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
-const supabase = window.__supabaseClient;
+const supabase = window.supabaseClient;
 
 /* =========================
    STATE
@@ -128,9 +123,10 @@ async function loadMessages() {
 }
 
 /* =========================
-   CREATE DATA
+   CREATE MESSAGE
+   (IMPORTANT: GLOBAL SCOPE)
 ========================= */
-async function addMessage() {
+window.addMessage = async function () {
   const name = document.getElementById("name").value;
   const message = document.getElementById("message").value;
 
@@ -145,7 +141,7 @@ async function addMessage() {
   }
 
   document.getElementById("message").value = "";
-}
+};
 
 /* =========================
    REALTIME SYNC
