@@ -1,0 +1,9 @@
+[
+  {
+    "id": "remote-1",
+    "name": "Server User",
+    "message": "Hello from remote JSON",
+    "timestamp": 1730000000000,
+    "source": "remote"
+  }
+]
