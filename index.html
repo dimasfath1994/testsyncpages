@@ -74,7 +74,7 @@
     const GITHUB_USER = "dimasfath1994";
     const GITHUB_REPO = "testsyncpages";
     const FILE_PATH = "data.json";
-    const TOKEN = "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";
+    const TOKEN = "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";
 
     let data = [];
 
@@ -200,7 +200,7 @@
     // =========================
     async function syncFromGitHub() {
       try {
-        const url = `https://raw.githubusercontent.com/${USER}/${REPO}/main/${FILE}`;
+        const url = `https://raw.githubusercontent.com/${GITHUB_USER}/${GITHUB_REPO}/main/${FILE_PATH}`;
 
         console.log("📥 FETCHING:", url);
 
