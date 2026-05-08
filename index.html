@@ -1,40 +1,59 @@
 <!DOCTYPE html>
-<html>
+<html lang="id">
 <head>
   <meta charset="UTF-8" />
-  <title>Post Dim - Supabase Fixed</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Post Dim - Supabase Realtime</title>
 
   <!-- Supabase SDK -->
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 
   <style>
     body {
-      font-family: Arial;
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
       background: #0f172a;
       color: white;
       display: flex;
       justify-content: center;
       padding-top: 40px;
+      margin: 0;
     }
 
     .container {
-      width: 520px;
+      width: 100%;
+      max-width: 520px;
+      padding: 20px;
+    }
+
+    h2 {
+      text-align: center;
+      color: #38bdf8;
     }
 
     input {
       width: 100%;
-      padding: 10px;
-      margin-bottom: 8px;
-      border-radius: 6px;
-      border: none;
+      padding: 12px;
+      margin-bottom: 10px;
+      border-radius: 8px;
+      border: 1px solid #334155;
+      background: #1e293b;
+      color: white;
+      box-sizing: border-box;
       outline: none;
     }
 
+    input:focus {
+      border-color: #38bdf8;
+    }
+
     button {
-      padding: 10px;
+      width: 100%;
+      padding: 12px;
       border: none;
-      border-radius: 6px;
+      border-radius: 8px;
       cursor: pointer;
+      font-weight: bold;
+      transition: background 0.3s;
     }
 
     .add {
@@ -42,126 +61,146 @@
       color: white;
     }
 
+    .add:hover {
+      background: #16a34a;
+    }
+
     .card {
       background: #1e293b;
-      padding: 10px;
-      margin-top: 10px;
-      border-radius: 6px;
+      padding: 15px;
+      margin-top: 12px;
+      border-radius: 8px;
+      border-left: 4px solid #38bdf8;
+      word-wrap: break-word;
+    }
+
+    .card b {
+      color: #38bdf8;
+      display: block;
+      margin-bottom: 4px;
+    }
+
+    #list {
+      margin-top: 20px;
     }
   </style>
 </head>
 
 <body>
   <div class="container">
+    <h2>Post Dim - Realtime</h2>
 
-    <h2>Post Dim - Supabase Realtime</h2>
+    <input id="name" placeholder="Nama Anda" />
+    <input id="message" placeholder="Tulis pesan..." />
 
-    <input id="name" placeholder="Name" />
-    <input id="message" placeholder="Message" />
+    <button class="add" onclick="addMessage()">Kirim Pesan</button>
 
-    <button class="add" onclick="addMessage()">Send</button>
-
-    <div id="list"></div>
-
+    <div id="list">
+      <p style="text-align: center; color: #94a3b8;">Memuat pesan...</p>
+    </div>
   </div>
 
-<script>
-/* =========================
-   CONFIG
-========================= */
-const SUPABASE_URL = "https://dppocgudnizboyjhkqpp.supabase.co";
-const SUPABASE_ANON_KEY = "sb_publishable_sohjVB2_F6I12ivkKHh07g_06hOuThS"; // pakai sb_publishable_xxx
+  <script>
+    (function() {
+      /* =========================
+         CONFIG
+      ========================= */
+      const SUPABASE_URL = "https://dppocgudnizboyjhkqpp.supabase.co";
+      const SUPABASE_ANON_KEY = "sb_publishable_sohjVB2_F6I12ivkKHh07g_06hOuThS"; // <--- GANTI INI DENGAN ANON KEY ASLI
 
-/* =========================
-   INIT SUPABASE (SAFE)
-========================= */
-window.supabaseClient =
-  window.supabaseClient ||
-  window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+      /* =========================
+         INIT SUPABASE
+      ========================= */
+      const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
-const supabase = window.supabaseClient;
+      const listContainer = document.getElementById("list");
 
-/* =========================
-   STATE
-========================= */
-const list = document.getElementById("list");
+      /* =========================
+         RENDER FUNCTION
+      ========================= */
+      function render(messages) {
+        if (messages.length === 0) {
+          listContainer.innerHTML = '<p style="text-align: center; color: #94a3b8;">Belum ada pesan.</p>';
+          return;
+        }
 
-/* =========================
-   RENDER
-========================= */
-function render(messages) {
-  list.innerHTML = "";
+        listContainer.innerHTML = "";
+        messages.forEach(m => {
+          const div = document.createElement("div");
+          div.className = "card";
+          div.innerHTML = `
+            <b>${m.name}</b>
+            ${m.message}
+          `;
+          listContainer.appendChild(div);
+        });
+      }
 
-  messages.forEach(m => {
-    const div = document.createElement("div");
-    div.className = "card";
+      /* =========================
+         LOAD DATA
+      ========================= */
+      async function loadMessages() {
+        const { data, error } = await supabase
+          .from("messages")
+          .select("*")
+          .order("created_at", { ascending: false });
 
-    div.innerHTML = `
-      <b>${m.name}</b><br/>
-      ${m.message}
-    `;
+        if (error) {
+          console.error("LOAD ERROR:", error.message);
+          return;
+        }
 
-    list.appendChild(div);
-  });
-}
+        render(data || []);
+      }
 
-/* =========================
-   LOAD DATA
-========================= */
-async function loadMessages() {
-  const { data, error } = await supabase
-    .from("messages")
-    .select("*")
-    .order("created_at", { ascending: false });
+      /* =========================
+         CREATE MESSAGE (GLOBAL)
+      ========================= */
+      window.addMessage = async function () {
+        const nameInput = document.getElementById("name");
+        const messageInput = document.getElementById("message");
 
-  if (error) {
-    console.error("LOAD ERROR:", error);
-    return;
-  }
+        const name = nameInput.value.trim();
+        const message = messageInput.value.trim();
 
-  render(data || []);
-}
+        if (!name || !message) {
+          alert("Isi nama dan pesan dulu ya!");
+          return;
+        }
 
-/* =========================
-   CREATE MESSAGE
-   (IMPORTANT: GLOBAL SCOPE)
-========================= */
-window.addMessage = async function () {
-  const name = document.getElementById("name").value;
-  const message = document.getElementById("message").value;
+        const { error } = await supabase
+          .from("messages")
+          .insert([{ name, message }]);
 
-  if (!name || !message) return;
+        if (error) {
+          console.error("INSERT ERROR:", error.message);
+          alert("Gagal mengirim pesan. Cek koneksi atau RLS Policy!");
+        } else {
+          messageInput.value = ""; // Hanya kosongkan pesan
+        }
+      };
 
-  const { error } = await supabase
-    .from("messages")
-    .insert([{ name, message }]);
+      /* =========================
+         REALTIME SYNC
+      ========================= */
+      supabase
+        .channel("public:messages")
+        .on(
+          "postgres_changes",
+          { event: "*", schema: "public", table: "messages" },
+          () => {
+            console.log("Ada perubahan data! Me-refresh...");
+            loadMessages();
+          }
+        )
+        .subscribe();
 
-  if (error) {
-    console.error("INSERT ERROR:", error);
-  }
-
-  document.getElementById("message").value = "";
-};
-
-/* =========================
-   REALTIME SYNC
-========================= */
-supabase
-  .channel("messages")
-  .on(
-    "postgres_changes",
-    { event: "*", schema: "public", table: "messages" },
-    () => {
+      /* =========================
+         INIT
+      ========================= */
       loadMessages();
-    }
-  )
-  .subscribe();
 
-/* =========================
-   INIT
-========================= */
-loadMessages();
-</script>
-
+    })();
+  </script>
 </body>
 </html>
