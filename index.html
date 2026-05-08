@@ -2,11 +2,11 @@
 <html>
 <head>
   <meta charset="UTF-8" />
-  <title>Post Dim Realtime Sync</title>
+  <title>Post Dim - JSON Sync (No DB)</title>
 
   <style>
     body {
-      font-family: Arial, sans-serif;
+      font-family: Arial;
       background: #0f172a;
       color: white;
       display: flex;
@@ -15,25 +15,24 @@
     }
 
     .container {
-      width: 420px;
+      width: 450px;
     }
 
     h2 {
-      margin-bottom: 20px;
+      margin-bottom: 15px;
     }
 
     form {
       display: flex;
       flex-direction: column;
       gap: 10px;
-      margin-bottom: 20px;
+      margin-bottom: 15px;
     }
 
     input {
       padding: 10px;
       border-radius: 6px;
       border: none;
-      outline: none;
     }
 
     button {
@@ -49,115 +48,176 @@
       background: #16a34a;
     }
 
-    #list {
-      display: flex;
-      flex-direction: column;
-      gap: 10px;
-    }
-
     .card {
       background: #1e293b;
       padding: 10px;
+      margin-top: 10px;
       border-radius: 6px;
     }
 
-    .name {
-      font-weight: bold;
+    .meta {
+      font-size: 12px;
+      color: #94a3b8;
+      margin-bottom: 5px;
+    }
+
+    .sync-info {
+      font-size: 12px;
       color: #38bdf8;
+      margin-bottom: 10px;
     }
   </style>
 </head>
 
 <body>
   <div class="container">
-    <h2>Post Dim - Realtime Sync</h2>
+
+    <h2>Post Dim - JSON Sync (No DB)</h2>
+
+    <div class="sync-info">
+      Mode: File-based sync (polling JSON every 3s)
+    </div>
 
     <form id="form">
       <input type="text" id="name" placeholder="Name" required />
       <input type="text" id="message" placeholder="Message" required />
-      <button type="submit">Send</button>
+      <button type="submit">Add Local</button>
     </form>
+
+    <button id="forceSync">Force Sync</button>
 
     <div id="list"></div>
   </div>
 
-  <script type="module">
-    import { createClient } from "https://cdn.jsdelivr.net/npm/@supabase/supabase-js/+esm";
+  <script>
+    // =========================
+    // SIMULATED REMOTE JSON URL
+    // =========================
+    // nanti ini bisa kamu ganti:
+    // - GitHub raw file
+    // - GitHub Pages JSON file
+    const REMOTE_URL = "./data.json";
 
-    // =======================
-    // 🔥 GANTI INI
-    // =======================
-    const SUPABASE_URL = "https://YOUR_PROJECT.supabase.co";
-    const SUPABASE_ANON_KEY = "YOUR_ANON_KEY";
+    const STORAGE_KEY = "postdim_local";
 
-    const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+    let localData = loadLocal();
 
-    const form = document.getElementById("form");
     const list = document.getElementById("list");
+    const form = document.getElementById("form");
 
-    // =======================
-    // render message
-    // =======================
-    function render(msg) {
-      const div = document.createElement("div");
-      div.className = "card";
-
-      div.innerHTML = `
-        <div class="name">${msg.name}</div>
-        <div>${msg.message}</div>
-      `;
-
-      list.prepend(div);
+    // =========================
+    // LOCAL STORAGE
+    // =========================
+    function loadLocal() {
+      const data = localStorage.getItem(STORAGE_KEY);
+      return data ? JSON.parse(data) : [];
     }
 
-    // =======================
-    // load awal
-    // =======================
-    async function load() {
-      const { data } = await supabase
-        .from("messages")
-        .select("*")
-        .order("id", { ascending: false });
+    function saveLocal() {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(localData));
+    }
 
+    // =========================
+    // RENDER
+    // =========================
+    function render(data) {
       list.innerHTML = "";
-      data.forEach(render);
+
+      data
+        .slice()
+        .reverse()
+        .forEach(item => {
+          const div = document.createElement("div");
+          div.className = "card";
+
+          div.innerHTML = `
+            <div class="meta">
+              ${item.source} • ${new Date(item.timestamp).toLocaleTimeString()}
+            </div>
+            <b>${item.name}</b><br/>
+            ${item.message}
+          `;
+
+          list.appendChild(div);
+        });
     }
 
-    // =======================
-    // submit form
-    // =======================
-    form.addEventListener("submit", async (e) => {
+    // =========================
+    // ADD LOCAL MESSAGE
+    // =========================
+    form.addEventListener("submit", (e) => {
       e.preventDefault();
 
       const name = document.getElementById("name").value;
       const message = document.getElementById("message").value;
 
-      await supabase.from("messages").insert([
-        { name, message }
-      ]);
+      const newItem = {
+        id: crypto.randomUUID(),
+        name,
+        message,
+        timestamp: Date.now(),
+        source: "local"
+      };
+
+      localData.push(newItem);
+      saveLocal();
+      render(localData);
 
       form.reset();
     });
 
-    // =======================
-    // realtime sync
-    // =======================
-    supabase
-      .channel("messages-channel")
-      .on(
-        "postgres_changes",
-        {
-          event: "INSERT",
-          schema: "public",
-          table: "messages"
-        },
-        (payload) => {
-          render(payload.new);
-        }
-      )
-      .subscribe();
+    // =========================
+    // SIMULATE REMOTE SYNC
+    // =========================
+    async function fetchRemote() {
+      try {
+        const res = await fetch(REMOTE_URL + "?t=" + Date.now());
+        const remote = await res.json();
 
-    load();
+        mergeData(remote);
+      } catch (err) {
+        console.log("No remote file or offline mode");
+      }
+    }
+
+    // =========================
+    // MERGE STRATEGY
+    // =========================
+    function mergeData(remoteData) {
+      const map = new Map();
+
+      // local first
+      localData.forEach(item => map.set(item.id, item));
+
+      // remote override/add
+      remoteData.forEach(item => {
+        if (!map.has(item.id)) {
+          map.set(item.id, {
+            ...item,
+            source: "remote"
+          });
+        }
+      });
+
+      localData = Array.from(map.values());
+
+      saveLocal();
+      render(localData);
+    }
+
+    // =========================
+    // MANUAL SYNC BUTTON
+    // =========================
+    document.getElementById("forceSync").addEventListener("click", fetchRemote);
+
+    // =========================
+    // AUTO SYNC (POLLING)
+    // =========================
+    setInterval(fetchRemote, 3000);
+
+    // init
+    render(localData);
+    fetchRemote();
   </script>
 </body>
 </html>
