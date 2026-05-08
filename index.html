@@ -2,7 +2,7 @@
 <html>
 <head>
   <meta charset="UTF-8" />
-  <title>Post Dim - GitHub Sync (No DB)</title>
+  <title>Post Dim - Fixed GitHub Sync</title>
 
   <style>
     body {
@@ -18,13 +18,9 @@
       width: 520px;
     }
 
-    h2 {
-      margin-bottom: 10px;
-    }
-
     input {
-      padding: 10px;
       width: 100%;
+      padding: 10px;
       margin-bottom: 8px;
       border-radius: 6px;
       border: none;
@@ -32,15 +28,14 @@
 
     button {
       padding: 10px;
-      border: none;
       border-radius: 6px;
+      border: none;
       cursor: pointer;
-      margin-top: 5px;
+      margin-right: 5px;
     }
 
     .add { background: #22c55e; color: white; }
     .sync { background: #3b82f6; color: white; }
-    .danger { background: #ef4444; color: white; }
 
     .card {
       background: #1e293b;
@@ -50,20 +45,18 @@
     }
 
     .actions {
-      display: flex;
-      gap: 5px;
       margin-top: 8px;
     }
 
-    .edit { background: #f59e0b; flex: 1; }
-    .delete { background: #ef4444; flex: 1; }
+    .edit { background: #f59e0b; }
+    .delete { background: #ef4444; color: white; }
   </style>
 </head>
 
 <body>
   <div class="container">
 
-    <h2>Post Dim - GitHub Sync</h2>
+    <h2>Post Dim - GitHub Sync FIX</h2>
 
     <input type="hidden" id="editId">
 
@@ -78,8 +71,6 @@
 
   <script>
     // =========================
-    // 🔥 GITHUB CONFIG
-    // =========================
     const GITHUB_USER = "dimasfath1994";
     const GITHUB_REPO = "testsyncpages";
     const FILE_PATH = "data.json";
@@ -87,11 +78,10 @@
 
     let data = [];
 
-    // =========================
-    // LOAD LOCAL FIRST
+    const list = document.getElementById("list");
+
     // =========================
     function render() {
-      const list = document.getElementById("list");
       list.innerHTML = "";
 
       data.forEach(item => {
@@ -108,14 +98,12 @@
           </div>
         `;
 
-        // EDIT
         div.querySelector(".edit").onclick = () => {
           document.getElementById("editId").value = item.id;
           document.getElementById("name").value = item.name;
           document.getElementById("message").value = item.message;
         };
 
-        // DELETE
         div.querySelector(".delete").onclick = () => {
           data = data.filter(d => d.id !== item.id);
           pushToGitHub();
@@ -126,8 +114,6 @@
       });
     }
 
-    // =========================
-    // CREATE / UPDATE
     // =========================
     function saveData() {
       const id = document.getElementById("editId").value;
@@ -152,52 +138,92 @@
     }
 
     // =========================
-    // PUSH TO GITHUB (WRITE SYNC)
+    // 🔥 PUSH (FIXED + DEBUG)
     // =========================
     async function pushToGitHub() {
-      const url = `https://api.github.com/repos/${GITHUB_USER}/${GITHUB_REPO}/contents/${FILE_PATH}`;
+      try {
+        const url = `https://api.github.com/repos/${USER}/${REPO}/contents/${FILE}`;
 
-      // get current file SHA
-      const getRes = await fetch(url, {
-        headers: { Authorization: `token ${TOKEN}` }
-      });
+        console.log("📡 GET FILE FOR SHA...");
 
-      const file = await getRes.json();
+        const getRes = await fetch(url, {
+          headers: {
+            Authorization: `token ${TOKEN}`
+          }
+        });
 
-      const content = btoa(unescape(encodeURIComponent(JSON.stringify(data, null, 2))));
+        const file = await getRes.json();
 
-      await fetch(url, {
-        method: "PUT",
-        headers: {
-          Authorization: `token ${TOKEN}`,
-          "Content-Type": "application/json"
-        },
-        body: JSON.stringify({
-          message: "update data.json",
-          content,
-          sha: file.sha
-        })
-      });
+        if (!file.sha) {
+          console.error("❌ SHA NOT FOUND", file);
+          return;
+        }
+
+        console.log("✅ SHA FOUND:", file.sha);
+
+        const content = btoa(
+          unescape(encodeURIComponent(JSON.stringify(data, null, 2)))
+        );
+
+        console.log("📤 PUSHING DATA...");
+
+        const res = await fetch(url, {
+          method: "PUT",
+          headers: {
+            Authorization: `token ${TOKEN}`,
+            "Content-Type": "application/json"
+          },
+          body: JSON.stringify({
+            message: "update data.json",
+            content,
+            sha: file.sha
+          })
+        });
+
+        const result = await res.json();
+
+        console.log("📦 PUSH RESULT:", result);
+
+        if (res.ok) {
+          console.log("✅ SYNC SUCCESS");
+        } else {
+          console.error("❌ SYNC FAILED", result);
+        }
+
+      } catch (err) {
+        console.error("❌ PUSH ERROR:", err);
+      }
     }
 
     // =========================
-    // PULL FROM GITHUB
+    // 🔥 PULL (SYNC READ)
     // =========================
     async function syncFromGitHub() {
-      const url = `https://raw.githubusercontent.com/${GITHUB_USER}/${GITHUB_REPO}/main/${FILE_PATH}`;
+      try {
+        const url = `https://raw.githubusercontent.com/${USER}/${REPO}/main/${FILE}`;
 
-      const res = await fetch(url + "?t=" + Date.now());
-      data = await res.json();
+        console.log("📥 FETCHING:", url);
 
-      render();
+        const res = await fetch(url + "?t=" + Date.now());
+
+        const text = await res.text();
+
+        console.log("RAW RESPONSE:", text);
+
+        data = JSON.parse(text);
+
+        render();
+
+        console.log("✅ SYNC PULL OK");
+
+      } catch (err) {
+        console.error("❌ SYNC PULL FAILED:", err);
+      }
     }
 
-    // =========================
-    // AUTO SYNC (every 5 sec)
-    // =========================
+    // auto sync
     setInterval(syncFromGitHub, 5000);
 
-    // init
     syncFromGitHub();
   </script>
 </body>
