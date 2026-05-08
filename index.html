@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Post Dim - Fixed Auto Refresh</title>
+  <title>Post Dim - Edit & Delete</title>
 
   <!-- Supabase SDK -->
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
@@ -25,6 +25,7 @@
     }
     h2 { text-align: center; color: #38bdf8; margin-bottom: 5px; }
     .status-bar { text-align: center; font-size: 12px; color: #94a3b8; margin-bottom: 20px; }
+    
     input {
       width: 100%;
       padding: 12px;
@@ -36,7 +37,8 @@
       box-sizing: border-box;
       outline: none;
     }
-    button {
+
+    .btn-send {
       width: 100%;
       padding: 12px;
       border: none;
@@ -45,15 +47,39 @@
       font-weight: bold;
       background: #22c55e;
       color: white;
+      margin-bottom: 20px;
     }
+
     .card {
       background: #1e293b;
       padding: 15px;
       margin-top: 12px;
       border-radius: 8px;
       border-left: 4px solid #38bdf8;
+      position: relative;
     }
-    .card b { color: #38bdf8; display: block; }
+
+    .card b { color: #38bdf8; display: block; margin-bottom: 5px; }
+    
+    .actions {
+      margin-top: 10px;
+      display: flex;
+      gap: 10px;
+    }
+
+    .btn-action {
+      padding: 5px 10px;
+      font-size: 11px;
+      border: none;
+      border-radius: 4px;
+      cursor: pointer;
+      color: white;
+      font-weight: bold;
+    }
+
+    .edit { background: #eab308; }
+    .delete { background: #ef4444; }
+
     #list { margin-top: 20px; }
   </style>
 </head>
@@ -61,25 +87,23 @@
 
   <div class="container">
     <h2>Post Dim</h2>
-    <div class="status-bar">🔄 Auto-sync setiap 3 detik</div>
+    <div class="status-bar">🔄 Auto-sync 3s | Edit & Delete Ready</div>
 
     <input id="name" placeholder="Nama Anda" />
     <input id="message" placeholder="Tulis pesan..." />
 
-    <button id="btnSend">Kirim Pesan</button>
+    <button id="btnSend" class="btn-send">Kirim Pesan</button>
 
     <div id="list">
-      <p style="text-align: center; color: #94a3b8;">Menghubungkan ke database...</p>
+      <p style="text-align: center; color: #94a3b8;">Memuat data...</p>
     </div>
   </div>
 
   <script>
-    // Membungkus kode agar tidak terjadi bentrok variabel (Error: Already declared)
     (function() {
       const SUPABASE_URL = "https://dppocgudnizboyjhkqpp.supabase.co";
-      const SUPABASE_ANON_KEY = "sb_publishable_sohjVB2_F6I12ivkKHh07g_06hOuThS"; // <--- GANTI INI
+      const SUPABASE_ANON_KEY = "sb_publishable_sohjVB2_F6I12ivkKHh07g_06hOuThS"; // <--- GANTI DENGAN KEY ASLI
 
-      // Gunakan variabel lokal di dalam scope ini
       const _supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
       
       const listContainer = document.getElementById("list");
@@ -87,19 +111,18 @@
       const messageInput = document.getElementById("message");
       const btnSend = document.getElementById("btnSend");
 
+      // --- FUNGSI LOAD ---
       async function loadMessages() {
         const { data, error } = await _supabase
           .from("messages")
           .select("*")
           .order("created_at", { ascending: false });
 
-        if (error) {
-          console.error("Fetch Error:", error.message);
-          return;
-        }
+        if (error) return;
         render(data || []);
       }
 
+      // --- FUNGSI RENDER ---
       function render(messages) {
         if (messages.length === 0) {
           listContainer.innerHTML = '<p style="text-align: center; color: #94a3b8;">Belum ada pesan.</p>';
@@ -109,31 +132,62 @@
         messages.forEach(m => {
           const div = document.createElement("div");
           div.className = "card";
-          div.innerHTML = `<b>${m.name}</b> ${m.message}`;
+          div.innerHTML = `
+            <b>${m.name}</b>
+            <span>${m.message}</span>
+            <div class="actions">
+              <button class="btn-action edit" onclick="editMsg('${m.id}', '${m.message}')">Edit</button>
+              <button class="btn-action delete" onclick="deleteMsg('${m.id}')">Hapus</button>
+            </div>
+          `;
           listContainer.appendChild(div);
         });
       }
 
-      // Handler kirim pesan (cara yang lebih aman daripada onclick di HTML)
+      // --- FUNGSI KIRIM ---
       btnSend.addEventListener("click", async () => {
         const name = nameInput.value.trim();
         const message = messageInput.value.trim();
-
         if (!name || !message) return;
 
         const { error } = await _supabase
           .from("messages")
           .insert([{ name, message }]);
 
-        if (error) {
-          alert("Gagal kirim: " + error.message);
-        } else {
+        if (!error) {
           messageInput.value = "";
           loadMessages();
         }
       });
 
-      // Jalankan interval 3 detik
+      // --- FUNGSI EDIT (Global agar bisa dipanggil onclick) ---
+      window.editMsg = async (id, oldMsg) => {
+        const newMsg = prompt("Edit pesan Anda:", oldMsg);
+        if (newMsg === null || newMsg.trim() === "" || newMsg === oldMsg) return;
+
+        const { error } = await _supabase
+          .from("messages")
+          .update({ message: newMsg })
+          .eq("id", id);
+
+        if (error) alert("Gagal edit: " + error.message);
+        else loadMessages();
+      };
+
+      // --- FUNGSI DELETE (Global) ---
+      window.deleteMsg = async (id) => {
+        if (!confirm("Yakin ingin menghapus pesan ini?")) return;
+
+        const { error } = await _supabase
+          .from("messages")
+          .delete()
+          .eq("id", id);
+
+        if (error) alert("Gagal hapus: " + error.message);
+        else loadMessages();
+      };
+
+      // Jalankan interval
       loadMessages();
       setInterval(loadMessages, 3000);
 
