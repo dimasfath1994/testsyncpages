@@ -2,7 +2,7 @@
 <html>
 <head>
   <meta charset="UTF-8" />
-  <title>Post Dim - JSON Sync (No DB)</title>
+  <title>Post Dim - CRUD JSON Sync</title>
 
   <style>
     body {
@@ -15,56 +15,73 @@
     }
 
     .container {
-      width: 450px;
+      width: 500px;
     }
 
     h2 {
-      margin-bottom: 15px;
+      margin-bottom: 10px;
     }
 
     form {
       display: flex;
       flex-direction: column;
       gap: 10px;
-      margin-bottom: 15px;
+      margin-bottom: 10px;
     }
 
     input {
       padding: 10px;
       border-radius: 6px;
       border: none;
+      outline: none;
     }
 
     button {
       padding: 10px;
-      background: #22c55e;
       border: none;
-      color: white;
-      cursor: pointer;
       border-radius: 6px;
+      cursor: pointer;
     }
 
-    button:hover {
-      background: #16a34a;
+    .add {
+      background: #22c55e;
+      color: white;
+    }
+
+    .sync {
+      background: #3b82f6;
+      color: white;
+      margin-bottom: 10px;
     }
 
     .card {
       background: #1e293b;
       padding: 10px;
-      margin-top: 10px;
       border-radius: 6px;
+      margin-top: 10px;
+    }
+
+    .actions {
+      margin-top: 10px;
+      display: flex;
+      gap: 5px;
+    }
+
+    .edit {
+      background: #f59e0b;
+      color: black;
+      flex: 1;
+    }
+
+    .delete {
+      background: #ef4444;
+      color: white;
+      flex: 1;
     }
 
     .meta {
-      font-size: 12px;
+      font-size: 11px;
       color: #94a3b8;
-      margin-bottom: 5px;
-    }
-
-    .sync-info {
-      font-size: 12px;
-      color: #38bdf8;
-      margin-bottom: 10px;
     }
   </style>
 </head>
@@ -72,55 +89,45 @@
 <body>
   <div class="container">
 
-    <h2>Post Dim - JSON Sync (No DB)</h2>
+    <h2>Post Dim - CRUD JSON Sync</h2>
 
-    <div class="sync-info">
-      Mode: File-based sync (polling JSON every 3s)
-    </div>
+    <button class="sync" id="syncBtn">Sync Remote JSON</button>
 
     <form id="form">
+      <input type="hidden" id="editId" />
       <input type="text" id="name" placeholder="Name" required />
       <input type="text" id="message" placeholder="Message" required />
-      <button type="submit">Add Local</button>
+      <button class="add" type="submit">Save</button>
     </form>
-
-    <button id="forceSync">Force Sync</button>
 
     <div id="list"></div>
   </div>
 
   <script>
     // =========================
-    // SIMULATED REMOTE JSON URL
-    // =========================
-    // nanti ini bisa kamu ganti:
-    // - GitHub raw file
-    // - GitHub Pages JSON file
+    const STORAGE_KEY = "postdim_crud";
     const REMOTE_URL = "./data.json";
 
-    const STORAGE_KEY = "postdim_local";
+    let data = load();
 
-    let localData = loadLocal();
-
-    const list = document.getElementById("list");
     const form = document.getElementById("form");
+    const list = document.getElementById("list");
 
     // =========================
-    // LOCAL STORAGE
+    // LOAD / SAVE
     // =========================
-    function loadLocal() {
-      const data = localStorage.getItem(STORAGE_KEY);
-      return data ? JSON.parse(data) : [];
+    function load() {
+      return JSON.parse(localStorage.getItem(STORAGE_KEY)) || [];
     }
 
-    function saveLocal() {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(localData));
+    function save() {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
     }
 
     // =========================
     // RENDER
     // =========================
-    function render(data) {
+    function render() {
       list.innerHTML = "";
 
       data
@@ -132,92 +139,103 @@
 
           div.innerHTML = `
             <div class="meta">
-              ${item.source} • ${new Date(item.timestamp).toLocaleTimeString()}
+              ${item.id}
             </div>
+
             <b>${item.name}</b><br/>
             ${item.message}
+
+            <div class="actions">
+              <button class="edit">Edit</button>
+              <button class="delete">Delete</button>
+            </div>
           `;
+
+          // EDIT
+          div.querySelector(".edit").onclick = () => {
+            document.getElementById("editId").value = item.id;
+            document.getElementById("name").value = item.name;
+            document.getElementById("message").value = item.message;
+          };
+
+          // DELETE
+          div.querySelector(".delete").onclick = () => {
+            data = data.filter(d => d.id !== item.id);
+            save();
+            render();
+          };
 
           list.appendChild(div);
         });
     }
 
     // =========================
-    // ADD LOCAL MESSAGE
+    // CREATE / UPDATE
     // =========================
     form.addEventListener("submit", (e) => {
       e.preventDefault();
 
+      const id = document.getElementById("editId").value;
       const name = document.getElementById("name").value;
       const message = document.getElementById("message").value;
 
-      const newItem = {
-        id: crypto.randomUUID(),
-        name,
-        message,
-        timestamp: Date.now(),
-        source: "local"
-      };
+      if (id) {
+        // UPDATE
+        const item = data.find(d => d.id === id);
+        if (item) {
+          item.name = name;
+          item.message = message;
+        }
+      } else {
+        // CREATE
+        data.push({
+          id: crypto.randomUUID(),
+          name,
+          message,
+          timestamp: Date.now(),
+          source: "local"
+        });
+      }
 
-      localData.push(newItem);
-      saveLocal();
-      render(localData);
-
+      save();
+      render();
       form.reset();
     });
 
     // =========================
-    // SIMULATE REMOTE SYNC
+    // SIMULATED SYNC (JSON FILE)
     // =========================
-    async function fetchRemote() {
+    async function syncRemote() {
       try {
         const res = await fetch(REMOTE_URL + "?t=" + Date.now());
         const remote = await res.json();
 
-        mergeData(remote);
-      } catch (err) {
-        console.log("No remote file or offline mode");
+        merge(remote);
+      } catch (e) {
+        console.log("No remote file");
       }
     }
 
-    // =========================
-    // MERGE STRATEGY
-    // =========================
-    function mergeData(remoteData) {
+    function merge(remote) {
       const map = new Map();
 
-      // local first
-      localData.forEach(item => map.set(item.id, item));
+      data.forEach(d => map.set(d.id, d));
 
-      // remote override/add
-      remoteData.forEach(item => {
-        if (!map.has(item.id)) {
-          map.set(item.id, {
-            ...item,
-            source: "remote"
-          });
+      remote.forEach(r => {
+        if (!map.has(r.id)) {
+          map.set(r.id, r);
         }
       });
 
-      localData = Array.from(map.values());
-
-      saveLocal();
-      render(localData);
+      data = Array.from(map.values());
+      save();
+      render();
     }
 
-    // =========================
-    // MANUAL SYNC BUTTON
-    // =========================
-    document.getElementById("forceSync").addEventListener("click", fetchRemote);
-
-    // =========================
-    // AUTO SYNC (POLLING)
-    // =========================
-    setInterval(fetchRemote, 3000);
+    document.getElementById("syncBtn").onclick = syncRemote;
 
     // init
-    render(localData);
-    fetchRemote();
+    render();
   </script>
 </body>
 </html>
